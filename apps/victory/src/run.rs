@@ -328,8 +328,16 @@ fn diagnostics(image: &victory_loader::LoadedImage, cfg: &victory_core::Config) 
     victory_loader::save_on_crash(
         ranges
             .split(',')
-            .filter_map(|r| r.split_once(':'))
-            .filter_map(|(rva, len)| Some((hex(rva)?, hex(len)?)))
+    let needs_patch = victory_gpu::stores_need_patching();
+    let mut requested = std::env::var("VICTORY_PATCH_MASKED").ok();
+    // Rosetta can also fault midway through the plain vector stores in
+    // these three loops. Their offsets are specific to Series 1.0.2.1.
+    if needs_patch && requested.is_none()
+        && hash.as_str() == "b99f876b74d4a77f03af5f878223b27bd647b5c35a79d5decd9f716504239e93"
+    {
+        requested = Some("all,1e09b31,1e09b37,259509f,25950a5,1e759f0,1e759f7,1e759fe,1e75a05".into());
+    }
+    let patching = victory_loader::masked::choice(requested, needs_patch);            .filter_map(|(rva, len)| Some((hex(rva)?, hex(len)?)))
             .filter(|&(rva, len)| rva.checked_add(len).is_some_and(|end| end <= size))
             .map(|(rva, len)| {
                 let file = cfg.cache_dir.join(format!("crash-{rva:x}.bin"));
